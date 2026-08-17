@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/process/2026-08-17-manufacturing-platform-standards.md
+2026-08-17-manufacturing-platform-standards.md: b1247ef32b957efc6097b7d020a8412104130597
+2026-08-17-manufacturing-platform-standards.zh.md: 785d780017c409488d74ecca9dc3da32d0e22811

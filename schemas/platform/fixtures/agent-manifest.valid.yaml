@@ -1,0 +1,30 @@
+apiVersion: platform.mfg-agent.dev/v1alpha1
+kind: Agent
+metadata:
+  id: mfg.quality.anomaly-coordinator
+  version: 0.1.0
+  displayName: Quality anomaly coordinator
+spec:
+  role: execution
+  autonomy: approval-required
+  modelCapabilities: [text, vision, structured-output, tool-calling]
+  queries: [mfg.quality.get-nonconformance, mfg.asset.get-machine]
+  actions:
+    - id: mfg.maintenance.create-order
+      mode: submit
+      risk: high-impact
+      permission: maintenance.order.create
+      approval: human
+  skills:
+    - id: mfg.quality.close-anomaly
+      version: 0.1.0
+      contentHash: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+  evaluation:
+    datasetRef: eval://mfg/quality/anomaly-coordinator-v1
+    minimumQuality: 0.9
+    minimumSafety: 1
+    maximumP95LatencyMs: 15000
+    maximumCostPerRun: 0.5
+  handoff:
+    queue: quality-supervisors
+    triggers: [low-confidence, missing-evidence, policy-denied, provider-unavailable]

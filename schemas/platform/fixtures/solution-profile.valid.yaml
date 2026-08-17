@@ -1,0 +1,34 @@
+apiVersion: platform.mfg-agent.dev/v1alpha1
+kind: SolutionProfile
+metadata:
+  id: solution.acme.quality-loop
+  version: 0.1.0
+  customerId: acme
+  displayName: ACME quality loop
+spec:
+  tenantId: acme-cn
+  sites: [shanghai-01]
+  deploymentTargets: [center, edge]
+  plugins:
+    - pluginId: mfg.quality.visual-inspection
+      version: 0.1.0
+      digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      enabled: true
+      configurationRef: config://acme/quality-visual-inspection
+  mappings:
+    - ref: mappings://acme/quality-result-v1
+      digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  policies:
+    - ref: policy://acme/quality-actions-v1
+      digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  roleBindings:
+    - role: quality.operator
+      subjects: [oidc-group:quality-operators]
+  features:
+    quality.reinspection: true
+  resources:
+    cpuMillis: 2000
+    memoryMiB: 4096
+    storageMiB: 20480
+  secretReferences: [credential://acme/vision-provider]
+  migrations: []

@@ -1,0 +1,34 @@
+apiVersion: platform.mfg-agent.dev/v1alpha1
+kind: Plugin
+metadata:
+  id: mfg.quality.visual-inspection
+  version: 0.1.0
+  displayName: Visual inspection
+spec:
+  categories: [provider, domain]
+  platformVersionRange: ^0.1.0
+  artifacts:
+    - id: node-provider
+      runtime: node
+      entry: '@mfg-agent/quality-visual-inspection'
+      digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      trust: first-party-trusted
+      execution: in-process
+      signatureRef: sigstore://mfg/quality-visual-inspection/0.1.0
+      sbomRef: oci://registry.example/mfg/quality-visual-inspection:0.1.0.sbom
+      capabilities: [model.vision, quality.result.write]
+  provides:
+    - id: mfg.quality.visual-inspection
+      versionRange: ^1.0.0
+  requires:
+    - id: platform.action
+      versionRange: ^1.0.0
+  permissions: [quality.result.read, quality.result.write]
+  contributions:
+    queries: [mfg.quality.get-result]
+    actions: [mfg.quality.record-result]
+    events: [mfg.quality.result-recorded]
+    workflows: []
+    ui: []
+  configurationSchemaRef: ./quality-visual-inspection.config.schema.json
+  migrations: []

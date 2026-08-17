@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.mfg-agent.dev/platform/agent-manifest.schema.json",
+  "title": "Manufacturing platform Agent Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "platform.mfg-agent.dev/v1alpha1" },
+    "kind": { "const": "Agent" },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "spec": { "$ref": "#/$defs/spec" }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^(?:platform|mfg|customer\\.[a-z0-9][a-z0-9-]*)\\.[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "displayName"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "version": { "$ref": "#/$defs/version" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 }
+      }
+    },
+    "actionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mode", "risk", "permission"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "mode": { "enum": ["propose", "submit"] },
+        "risk": { "enum": ["read", "reversible-write", "high-impact", "irreversible"] },
+        "permission": { "type": "string", "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$" },
+        "approval": { "enum": ["policy", "human"] }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["datasetRef", "minimumQuality", "minimumSafety", "maximumP95LatencyMs", "maximumCostPerRun"],
+      "properties": {
+        "datasetRef": { "type": "string", "minLength": 1 },
+        "minimumQuality": { "type": "number", "minimum": 0, "maximum": 1 },
+        "minimumSafety": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maximumP95LatencyMs": { "type": "integer", "minimum": 1 },
+        "maximumCostPerRun": { "type": "number", "minimum": 0 }
+      }
+    },
+    "autonomyBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sites", "resourceTypes", "maximumActionsPerHour", "validUntil"],
+      "properties": {
+        "sites": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "resourceTypes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "maximumActionsPerHour": { "type": "integer", "minimum": 1 },
+        "validUntil": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.-]+Z$" }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "autonomy", "modelCapabilities", "queries", "actions", "skills", "evaluation", "handoff"],
+      "properties": {
+        "role": { "enum": ["query", "analysis", "recommendation", "execution", "supervision"] },
+        "autonomy": { "enum": ["read-only", "recommend", "approval-required", "bounded-auto"] },
+        "modelCapabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["text", "vision", "structured-output", "embeddings", "tool-calling"] }
+        },
+        "queries": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } },
+        "actions": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/actionRequest" } },
+        "skills": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "version", "contentHash"],
+            "properties": {
+              "id": { "$ref": "#/$defs/identifier" },
+              "version": { "$ref": "#/$defs/version" },
+              "contentHash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+            }
+          }
+        },
+        "autonomyBounds": { "$ref": "#/$defs/autonomyBounds" },
+        "evaluation": { "$ref": "#/$defs/evaluation" },
+        "handoff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["queue", "triggers"],
+          "properties": {
+            "queue": { "type": "string", "minLength": 1 },
+            "triggers": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "enum": ["low-confidence", "missing-evidence", "contradictory-evidence", "policy-denied", "approval-rejected", "provider-unavailable", "partial-completion"] }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "autonomy": { "const": "read-only" } }, "required": ["autonomy"] },
+          "then": { "properties": { "actions": { "type": "array", "maxItems": 0 } } }
+        },
+        {
+          "if": { "properties": { "autonomy": { "const": "recommend" } }, "required": ["autonomy"] },
+          "then": { "properties": { "actions": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/actionRequest" }, { "type": "object", "properties": { "mode": { "const": "propose" } } }] } } } }
+        },
+        {
+          "if": { "properties": { "autonomy": { "const": "approval-required" } }, "required": ["autonomy"] },
+          "then": { "properties": { "actions": { "type": "array", "items": { "allOf": [{ "$ref": "#/$defs/actionRequest" }, { "type": "object", "required": ["approval"], "properties": { "mode": { "const": "submit" }, "approval": { "const": "human" } } }] } } } }
+        },
+        {
+          "if": { "properties": { "autonomy": { "const": "bounded-auto" } }, "required": ["autonomy"] },
+          "then": {
+            "required": ["autonomyBounds"],
+            "properties": {
+              "autonomyBounds": { "$ref": "#/$defs/autonomyBounds" },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "allOf": [
+                    { "$ref": "#/$defs/actionRequest" },
+                    { "type": "object", "properties": { "mode": { "const": "submit" }, "risk": { "enum": ["read", "reversible-write", "high-impact"] } } }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

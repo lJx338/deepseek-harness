@@ -1,0 +1,21 @@
+apiVersion: platform.mfg-agent.dev/v1alpha1
+kind: Plugin
+metadata:
+  id: quality-plugin
+  version: latest
+  displayName: Unsafe visual inspection
+spec:
+  categories: [provider]
+  platformVersionRange: '*'
+  artifacts:
+    - id: remote-code
+      runtime: node
+      entry: ./index.js
+      digest: latest
+      trust: untrusted
+      execution: in-process
+      capabilities: []
+  provides: []
+  requires: []
+  permissions: [write-everything]
+  contributions: {}

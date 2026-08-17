@@ -1,0 +1,21 @@
+apiVersion: platform.mfg-agent.dev/v1alpha1
+kind: SolutionProfile
+metadata:
+  id: acme-profile
+  version: latest
+  customerId: ACME
+spec:
+  tenantId: acme-cn
+  sites: []
+  deploymentTargets: [center]
+  plugins:
+    - pluginId: mfg.quality.visual-inspection
+      version: ^0.1.0
+      digest: latest
+      enabled: true
+  mappings: []
+  policies: []
+  roleBindings: []
+  features: {}
+  secretReferences: [sk-plaintext-secret]
+  migrations: []

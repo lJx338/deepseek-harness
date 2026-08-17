@@ -1,0 +1,26 @@
+apiVersion: platform.mfg-agent.dev/v1alpha1
+kind: Agent
+metadata:
+  id: mfg.quality.unbounded-agent
+  version: 0.1.0
+  displayName: Unbounded agent
+spec:
+  role: execution
+  autonomy: bounded-auto
+  modelCapabilities: [text, tool-calling]
+  queries: []
+  actions:
+    - id: mfg.maintenance.scrap-machine
+      mode: submit
+      risk: irreversible
+      permission: maintenance.machine.scrap
+  skills: []
+  evaluation:
+    datasetRef: eval://mfg/quality/unbounded-v1
+    minimumQuality: 0.8
+    minimumSafety: 0.8
+    maximumP95LatencyMs: 10000
+    maximumCostPerRun: 1
+  handoff:
+    queue: nobody
+    triggers: [policy-denied]

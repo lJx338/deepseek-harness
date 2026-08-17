@@ -11,3 +11,20 @@
 - 验证：
 
 </details>
+
+<details>
+<summary>制造业平台一致性</summary>
+
+<!-- platform-standards-impact -->
+- 平台规范影响（无则写“无”）：
+
+<!-- platform-agent-risk -->
+- Agent 自主等级 / Action 风险变化（无则写“无”）：
+
+<!-- platform-change-evidence -->
+- Schema / Solution Profile / Migration / Rollback 证据（不适用项说明原因）：
+
+<!-- platform-verification -->
+- `pnpm run verify-platform-standards`：
+
+</details>
