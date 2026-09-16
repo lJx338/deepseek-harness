@@ -140,12 +140,13 @@ MCP 仅保证工具名在[单个服务器内](https://modelcontextprotocol.io/sp
 
 为来自同一个 MCP 服务器的所有工具提供统一的 `execute` 处理器：
 
-1. 解析 `rawName`（执行器闭包持有它），以配置的超时时间调用 `client.callTool({ name: rawName, arguments }, { signal: exec.signal })`——公开名称永远不发送给服务器。
-2. 把规范成功值保留为 `{ content: JsonValue[], structuredContent? }`；完整 MCP JSON 块仍是程序化调用／PTC mode 值。`isError: true` 会在持久化任何图片前抛出，使失败路径归注册表所有。
-3. 另行准备有序 Native 投影。连续文本块以 `'\n'` 连接；资源链接以文本保留名称和 URI；音频、嵌入资源、格式错误的块和未知类型成为明确诊断。只要存在图片，桥接层就严格解码完整批次，解析调用 agent 的最新确切路由，要求附件存储以及模型明确支持图片输入，再把全成员校验和有序持久化委托给 `AttachmentStore.saveImages()`。任何解码、能力或存储拒绝都会把全部图片渲染为诊断文本，且不返回部分引用。
-4. 保持 `output.render` 同步且纯净。执行器把更丰富的投影暂存在按同步世代创建、以确切执行为键的 `WeakMap` 中；只有注册表的 post-execute 结果仍保留原规范值和兜底内容时，`finalizeContent` 才安装该投影。策略阻止、值替换或内容替换仍具有权威性，重新同步也无法让旧世代消费新执行状态。
-5. PTC mode 接收未改动的规范值。其通用分发桥接层会把包含图片的成功最终内容序列经外层 `run_code` 结果延后，因此 MCP 无需私有父 token 特例。
-6. 取消：`exec.signal`（来自 agent loop 的取消）透传给 MCP SDK 的 `callTool`、确切模型查询和存储前门禁。
+1. 解析 `rawName`（执行器闭包持有它），以配置的超时时间通过未缓存的 `client.request()` 发送 `tools/call`——公开名称永远不发送给服务器。
+2. 此 Qiushi fork 在 `arguments` 旁构造 `params._meta["qiushi.action-execution/tool-call"]`。该对象包含 `protocolVersion: "qiushi.dsh-tool-call.v1"`、直接来自 `ToolExecution` 的 `rootCallId` 与 `callId`，以及仅在执行由 Agent 发起时加入的 `agent.session.id`。模型参数绝不合并进此对象。它是关联身份而非授权凭据：消费方须独立完成认证，并且只能在自身私有 stdio 通道上信任该对象。命名空间与协议名称表明该扩展归 Qiushi 所有，而非上游 DeepSeek 协议。
+3. 把规范成功值保留为 `{ content: JsonValue[], structuredContent? }`；完整 MCP JSON 块仍是程序化调用／PTC mode 值。`isError: true` 会在持久化任何图片前抛出，使失败路径归注册表所有。
+4. 另行准备有序 Native 投影。连续文本块以 `'\n'` 连接；资源链接以文本保留名称和 URI；音频、嵌入资源、格式错误的块和未知类型成为明确诊断。只要存在图片，桥接层就严格解码完整批次，解析调用 agent 的最新确切路由，要求附件存储以及模型明确支持图片输入，再把全成员校验和有序持久化委托给 `AttachmentStore.saveImages()`。任何解码、能力或存储拒绝都会把全部图片渲染为诊断文本，且不返回部分引用。
+5. 保持 `output.render` 同步且纯净。执行器把更丰富的投影暂存在按同步世代创建、以确切执行为键的 `WeakMap` 中；只有注册表的 post-execute 结果仍保留原规范值和兜底内容时，`finalizeContent` 才安装该投影。策略阻止、值替换或内容替换仍具有权威性，重新同步也无法让旧世代消费新执行状态。
+6. PTC mode 接收未改动的规范值。其通用分发桥接层会把包含图片的成功最终内容序列经外层 `run_code` 结果延后，因此 MCP 无需私有父 token 特例。
+7. 取消：`exec.signal`（来自 agent loop 的取消）透传给 MCP SDK 请求、确切模型查询和存储前门禁。
 
 ### 子进程环境（stdio 传输）
 
@@ -172,6 +173,10 @@ MCP 仅保证工具名在[单个服务器内](https://modelcontextprotocol.io/sp
 ### 桥接 Resources 和 Prompts
 
 延后。Resources 需要 harness 侧的机制来决定何时注入内容（系统提示词？按需？模型触发？）。Prompts 需要 harness 尚不具备的「提示词模板」概念。两者都需要独立设计；Tools 是高价值、低风险的起点。
+
+### 从 JSON-RPC request id 或生成的 UUID 派生执行身份
+
+不予采用。重连会创建新的 MCP client 世代并重新开始 JSON-RPC 序号，而生成的 UUID 会在每次重试时改变。两者都无法在重连或 session resume 后标识同一个逻辑 `ToolExecution`。只有注册表持有的 `callId`、`rootCallId` 与可选 Agent session ID 携带该身份；接受模型参数中的同名字段则会跨越模型输入信任边界。
 
 ### 原始模型可见工具名加可选 `toolPrefix`
 
@@ -205,14 +210,15 @@ MCP 仅保证工具名在[单个服务器内](https://modelcontextprotocol.io/sp
 
 覆盖范围按层级列出；每项行为都放在能够表达它的最低成本层级。
 
-- **单元测试**（`tests/mcp-client.spec.ts`、`tests/apply.spec.ts`，mock MCP SDK）：`publicToolName` 算法（干净名称、规范化、截断加 hash、确定性、不同标识的分离）、raw 与 public 的协议纪律、跨服务器与原生工具共存、重复 `serverName` 加载失败与预留释放、无效工具列表拒绝、注册代切换/回滚、重新同步失败时保留上一代注册、无损规范结果、丰富内容混合顺序、格式错误批次原子性、确切能力／存储拒绝、明确的非图片诊断、post-execute 策略优先级、取消，以及配置 schema 校验。100% 逐文件覆盖率门禁约束该包。
-- **E2E**（`tests/mcp-client.e2e.ts`，无需密钥）：使用真实 MCP 协议对接仓库内的 fixture（测试前置数据）服务器、`@modelcontextprotocol/server-everything` 和 `@modelcontextprotocol/server-filesystem`（stdio 传输），以及进程内 `StreamableHTTPServerTransport` 服务器（Streamable HTTP 传输）——命名空间下的发现、带点号名称的端到端规范化、执行往返、持久图片保存／读取且 base64 只保留在规范值中、缺少图片路由时明确拒绝、重复 `serverName` 拒绝，以及 dispose。
+- **单元测试**（`tests/mcp-client.spec.ts`、`tests/reconnect.spec.ts`、`tests/apply.spec.ts`，mock MCP SDK）：`publicToolName` 算法（干净名称、规范化、截断加 hash、确定性、不同标识的分离）、raw 与 public 的协议纪律、可信根调用／嵌套调用／session 元数据、模型参数隔离、MCP client 世代重建后的元数据稳定性、跨服务器与原生工具共存、重复 `serverName` 加载失败与预留释放、无效工具列表拒绝、注册代切换/回滚、重新同步失败时保留上一代注册、无损规范结果、丰富内容混合顺序、格式错误批次原子性、确切能力／存储拒绝、明确的非图片诊断、post-execute 策略优先级、取消，以及配置 schema 校验。100% 逐文件覆盖率门禁约束该包。
+- **E2E**（`tests/mcp-client.e2e.ts`，无需密钥）：使用真实 MCP 协议对接仓库内的 fixture（测试前置数据）服务器、`@modelcontextprotocol/server-everything` 和 `@modelcontextprotocol/server-filesystem`（stdio 传输），以及进程内 `StreamableHTTPServerTransport` 服务器（Streamable HTTP 传输）——命名空间下的发现、带点号名称的端到端规范化、执行往返、服务端在真实 stdio 进程崩溃与重连前后观察到的 Qiushi 元数据、持久图片保存／读取且 base64 只保留在规范值中、缺少图片路由时明确拒绝、重复 `serverName` 拒绝，以及 dispose。
 - **快照**：组装后的 ACP 示例负责传输可见的内联图片 transcript 与 PTC mode 图片转发 transcript；包 E2E 负责真实 MCP 协议，因为可运行快照必须保持无密钥且确定，而不是 spawn 第三方服务器包。MCP 工具卡片仍使用通用卡片兜底，无需包专属 UI 快照。
 
 ## 后果
 
 - 每个 MCP 服务器只需 `cordis.yml` 中的一条配置即完成集成：`serverName: filesystem` 加一条 stdio 命令（或一个 Streamable HTTP URL），就能将 `mcp__filesystem__read_file` 放入模型的工具列表，可调用，协议上使用原始的 `read_file`。
 - 公开名称是会话历史和权限／配置 API 的一部分；测试固定了命名算法，发布后变更即为破坏性变更。
+- Qiushi action execution 可以用 Host 生成的 session／根调用／调用身份对 MCP 重连和 Host resume 前后的同一逻辑调用去重。该元数据不授予任何权限，不包含 tenant、actor、installation、凭据、action payload 或工具 input，并且在没有 Agent 的普通程序调用中可以不含 session ID。
 - `mcp__<serverName>__` 限定符在每个名称上消耗 token。已接受：描述和 JSON Schema 在工具定义 token 中占主导，而限定符换来了稳定标识、冲突隔离和 MCP 全局策略匹配模式（`mcp__*`、`mcp__github__*`）。
 - **MCP SDK 稳定性**：`@modelcontextprotocol/sdk` 仍在演进中；破坏性变更需要更新桥接。版本已固定，且该 SDK 被广泛采用（Claude Desktop、Cursor、VS Code），因此破坏性变更不太可能悄然发生。
 - **工具 schema 质量**：MCP 服务器可能暴露描述不佳的工具（模糊的描述、不完整的 JSON Schema）。harness 原样透传——垃圾进垃圾出；这是服务器作者的责任，不是桥接的。

@@ -58,6 +58,12 @@ const HASH_LENGTH = 12
 /** Raw result record: the bridge owns JSON-value validation after transport. */
 const RawCallToolResultSchema = z.record(z.string(), z.unknown())
 
+/** Qiushi fork protocol marker for Host-generated tool-call correlation. */
+const QIUSHI_TOOL_CALL_PROTOCOL = 'qiushi.dsh-tool-call.v1'
+
+/** Qiushi fork metadata key kept outside model-supplied tool arguments. */
+const QIUSHI_TOOL_CALL_META_KEY = 'qiushi.action-execution/tool-call'
+
 /** Raster formats supported by the durable attachment vocabulary. */
 const IMAGE_MEDIA_TYPES: readonly ImageMediaType[] = [
   'image/png',
@@ -85,8 +91,23 @@ function callToolUncached(
   exec: ToolExecution,
   opts: ToolBridgeOptions,
 ) {
+  const sessionId = exec.agent?.session.id
   return client.request(
-    { method: 'tools/call', params: { name: rawName, arguments: args } },
+    {
+      method: 'tools/call',
+      params: {
+        name: rawName,
+        arguments: args,
+        _meta: {
+          [QIUSHI_TOOL_CALL_META_KEY]: {
+            protocolVersion: QIUSHI_TOOL_CALL_PROTOCOL,
+            ...sessionId === undefined ? {} : { sessionId },
+            rootCallId: exec.rootCallId,
+            callId: exec.callId,
+          },
+        },
+      },
+    },
     RawCallToolResultSchema,
     {
       signal: exec.signal,
