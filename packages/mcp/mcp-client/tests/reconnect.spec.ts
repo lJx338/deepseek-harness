@@ -170,6 +170,47 @@ describe('reconnect supervisor', () => {
     expect(instances).toHaveLength(2)
   })
 
+  it('preserves logical call metadata across a client generation reset and changes it for a new call', async () => {
+    await apply(ctx, stdioConfig({ initialDelayMs: 2, maxDelayMs: 40, maxAttempts: 5 }))
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__srv__remote')).toBeDefined() })
+    const execution = {
+      signal: testToolSignal,
+      agent: { session: { id: 'session-reconnect' } } as never,
+      rootCallId: ToolCallId('root-stable'),
+      callId: ToolCallId('call-stable'),
+      name: 'mcp__srv__remote',
+      arguments: {},
+    }
+
+    await ctx.tools.execute(execution)
+    const before = mockCallTool.mock.calls[0]![0]
+
+    instances[0]!.onclose?.()
+    await vi.waitFor(() => {
+      expect(instances).toHaveLength(2)
+      expect(mockListTools).toHaveBeenCalledTimes(2)
+      expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
+    })
+
+    await ctx.tools.execute(execution)
+    const after = mockCallTool.mock.calls[1]![0]
+    expect(after).toEqual(before)
+
+    await ctx.tools.execute({ ...execution, callId: ToolCallId('call-new') })
+    expect(mockCallTool.mock.calls[2]![0]).toEqual({
+      name: 'remote',
+      arguments: {},
+      _meta: {
+        'qiushi.action-execution/tool-call': {
+          protocolVersion: 'qiushi.dsh-tool-call.v1',
+          sessionId: 'session-reconnect',
+          rootCallId: 'root-stable',
+          callId: 'call-new',
+        },
+      },
+    })
+  })
+
   it('stops at the failure cap, unregisters the tools, and reports final failure', async () => {
     const { warns, errors } = captureLogs(ctx)
     await apply(ctx, stdioConfig({ initialDelayMs: 2, maxDelayMs: 8, maxAttempts: 2 }))

@@ -164,6 +164,30 @@ describe('fixture server — controlled scenarios', () => {
     expect(result.content[0]).toEqual({ type: 'text', text: 'Hello, World!' })
   })
 
+  it('delivers Host-generated call metadata through real stdio', async () => {
+    const result = await ctx.tools.execute({
+      signal: testToolSignal,
+      agent: { session: { id: 'stdio-session' } } as never,
+      rootCallId: ToolCallId('stdio-root'),
+      callId: ToolCallId('stdio-call'),
+      name: 'mcp__fixture__identity',
+      arguments: {
+        _meta: {
+          'qiushi.action-execution/tool-call': { callId: 'forged-call' },
+        },
+      },
+    })
+
+    expect(JSON.parse(textOf(result.content[0]))).toEqual({
+      'qiushi.action-execution/tool-call': {
+        protocolVersion: 'qiushi.dsh-tool-call.v1',
+        sessionId: 'stdio-session',
+        rootCallId: 'stdio-root',
+        callId: 'stdio-call',
+      },
+    })
+  })
+
   it('executes fail() → isError result', async () => {
     const result = await ctx.tools.execute({
       signal: testToolSignal,
@@ -258,6 +282,16 @@ describe('fixture server — crash recovery', () => {
     const ctx = await mountRegistry()
     await apply(ctx, crashConfig('crashy', { initialDelayMs: 50, maxDelayMs: 500, maxAttempts: 40 }))
 
+    const stableExecution = {
+      signal: testToolSignal,
+      agent: { session: { id: 'reconnect-session' } } as never,
+      rootCallId: ToolCallId('reconnect-root'),
+      callId: ToolCallId('reconnect-call'),
+      name: 'mcp__crashy__identity',
+      arguments: {},
+    }
+    const identityBefore = await ctx.tools.execute(stableExecution)
+
     const before = await ctx.tools.execute({
       signal: testToolSignal,
       callId: nextCallId(), name: 'mcp__crashy__add', arguments: { a: 2, b: 3 },
@@ -285,6 +319,22 @@ describe('fixture server — crash recovery', () => {
     // The recovered generation replaced the dead one: no duplicates, no leak.
     const addEntries = ctx.tools.schemas().map(s => s.name).filter(name => name === 'mcp__crashy__add')
     expect(addEntries).toHaveLength(1)
+
+    const identityAfter = await ctx.tools.execute(stableExecution)
+    expect(textOf(identityAfter.content[0])).toBe(textOf(identityBefore.content[0]))
+
+    const newIdentity = await ctx.tools.execute({
+      ...stableExecution,
+      callId: ToolCallId('reconnect-call-new'),
+    })
+    expect(JSON.parse(textOf(newIdentity.content[0]))).toEqual({
+      'qiushi.action-execution/tool-call': {
+        protocolVersion: 'qiushi.dsh-tool-call.v1',
+        sessionId: 'reconnect-session',
+        rootCallId: 'reconnect-root',
+        callId: 'reconnect-call-new',
+      },
+    })
 
     await ctx.fiber.dispose()
     await sleep(200)

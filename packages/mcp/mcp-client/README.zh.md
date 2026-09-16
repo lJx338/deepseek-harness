@@ -82,6 +82,8 @@ kind: "package-reference"
 
 模型调用 MCP 工具时，调用会以每次调用超时（默认 60 秒）发往远程服务器，并像其他工具调用一样可以取消。结果按块顺序以普通文本返回；资源链接以文本形式显示名称与 URI。如果服务器报告错误，调用会明确失败——模型不会看到虚假的成功。
 
+此 Qiushi fork 还会把 Host 生成的执行关联身份写入 `tools/call.params._meta["qiushi.action-execution/tool-call"]`：协议版本、根调用 ID、调用 ID，以及执行由 Agent 发起时的可信 Agent session ID。模型参数不能设置或替换这些字段。该元数据不是授权凭据；服务端仍须独立完成调用方认证和授权，Qiushi 只会在调用来自自身私有启动的 stdio 子进程且 cell credential 有效时将其作为可信身份接受。
+
 当前模型接受图片输入且 harness 启用了附件功能时支持图片；图片会像其他图片一样出现在对话中。不支持图片时——以及服务器返回音频或嵌入资源时——模型会看到清晰的诊断消息，而不是什么都没有。
 
 ### 启动、工具更新与重连
@@ -126,7 +128,7 @@ kind: "package-reference"
 
 ### 工具执行内部细节
 
-工具调用会发送一次未缓存的 `tools/call` 请求，携带原始 MCP 名称、JSON 参数、中止信号与配置的超时；公开名称绝不会发给服务器，也绝不会被解析还原。规范成功值是 `{ content: JsonValue[], structuredContent? }`，为程序化调用方与 PTC mode 调用方保留完整的 MCP JSON 块。受支持且已声明的 `outputSchema` 会验证 `structuredContent`；不受支持的 schema 词汇回退为不受约束的 `JsonValue`。MCP 的 `isError` 结果会在任何图片持久化之前抛出，使注册表产生失败的工具结果。图片批次会先整体解码并校验，再保存任一成员；任何拒绝都会把每张图片投影为诊断文本。
+工具调用会发送一次未缓存的 `tools/call` 请求，携带原始 MCP 名称、JSON 参数、Host 生成的 Qiushi 执行元数据、中止信号与配置的超时；公开名称绝不会发给服务器，也绝不会被解析还原。桥接层直接从 `ToolExecution` 取得 `callId` 和 `rootCallId`，仅在执行由 Agent 发起时加入 `agent.session.id`，并且绝不把模型参数合并到 `_meta`。规范成功值是 `{ content: JsonValue[], structuredContent? }`，为程序化调用方与 PTC mode 调用方保留完整的 MCP JSON 块。受支持且已声明的 `outputSchema` 会验证 `structuredContent`；不受支持的 schema 词汇回退为不受约束的 `JsonValue`。MCP 的 `isError` 结果会在任何图片持久化之前抛出，使注册表产生失败的工具结果。图片批次会先整体解码并校验，再保存任一成员；任何拒绝都会把每张图片投影为诊断文本。
 
 ### 环境清洗（stdio）
 

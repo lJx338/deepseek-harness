@@ -30,6 +30,14 @@ server.registerTool('greet', {
   content: [{ type: 'text', text: `Hello, ${args.name}!` }],
 }))
 
+server.registerTool('identity', {
+  title: 'Identity Tool',
+  description: 'Returns the request metadata received by the server.',
+  inputSchema: {},
+}, async (_args, extra) => ({
+  content: [{ type: 'text', text: JSON.stringify(extra._meta ?? null) }],
+}))
+
 server.registerTool('fail', {
   title: 'Fail Tool',
   description: 'Always returns an error.',

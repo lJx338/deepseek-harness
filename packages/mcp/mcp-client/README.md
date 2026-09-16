@@ -82,6 +82,8 @@ The model sees each tool under a stable server-qualified name: `mcp__<serverName
 
 When the model calls an MCP tool, the call runs against the remote server with a per-call timeout (default 60 seconds) and can be cancelled like any other tool call. The result comes back as ordinary text in block order; resource links appear as text with their name and URI. If the server reports an error, the call fails visibly — the model does not see a fake success.
 
+This Qiushi fork also places Host-generated execution correlation under `tools/call.params._meta["qiushi.action-execution/tool-call"]`: protocol version, root call id, call id, and the trusted Agent session id when the execution has one. Model arguments cannot set or replace these fields. The metadata is not an authorization credential; a server must authenticate and authorize the caller independently, and Qiushi accepts it as trusted identity only from a privately launched stdio child with a valid cell credential.
+
 Images are supported when the current model accepts image input and the harness attachment feature is enabled; they then appear in the conversation like other images. Otherwise — and for audio or embedded resources — the model sees a clear diagnostic message instead of nothing.
 
 ### Startup, updates, and reconnection
@@ -126,7 +128,7 @@ The supervisor listens for `notifications/tools/list_changed` and queues a re-sy
 
 ### Tool execution internals
 
-A tool call sends an uncached `tools/call` request carrying the raw MCP name, the JSON arguments, the abort signal, and the configured timeout; the public name is never sent to the server and never parsed back. Canonical success is `{ content: JsonValue[], structuredContent? }`, preserving the complete MCP JSON blocks for programmatic and PTC mode callers. A supported advertised `outputSchema` validates `structuredContent`; unsupported schema vocabulary falls back to unconstrained `JsonValue`. An MCP `isError` result throws before any image persistence, so the registry produces a failed tool result. Image batches are decoded and validated as a whole before any member is saved; any refusal projects every image as diagnostic text.
+A tool call sends an uncached `tools/call` request carrying the raw MCP name, the JSON arguments, Host-generated Qiushi execution metadata, the abort signal, and the configured timeout; the public name is never sent to the server and never parsed back. The bridge takes `callId` and `rootCallId` directly from `ToolExecution`, adds `agent.session.id` only when an Agent owns the execution, and never merges model arguments into `_meta`. Canonical success is `{ content: JsonValue[], structuredContent? }`, preserving the complete MCP JSON blocks for programmatic and PTC mode callers. A supported advertised `outputSchema` validates `structuredContent`; unsupported schema vocabulary falls back to unconstrained `JsonValue`. An MCP `isError` result throws before any image persistence, so the registry produces a failed tool result. Image batches are decoded and validated as a whole before any member is saved; any refusal projects every image as diagnostic text.
 
 ### Environment scrubbing (stdio)
 
